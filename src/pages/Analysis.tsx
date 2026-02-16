@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PillToggle from "@/components/dashboard/PillToggle";
+import RawDataTable from "@/components/dashboard/RawDataTable";
 import { Button } from "@/components/ui/button";
 import { fetchStats, fetchScatter, fetchConditional, fetchPath, fetchHistogram } from "@/lib/api";
 import {
@@ -47,27 +48,34 @@ const tabs = [
 // Stats data will be fetched from API
 
 // Inline conclusions per chart tab (from the screenshots)
-const getConclusion = (tabId: string, indicator: string, market: string) => {
+const getConclusion = (tabId: string, indicator: string, market: string, stats: any, scatterData: any) => {
+  const n = stats?.totalReleases || 24;
+  const rSq = scatterData?.stats?.rSquared;
+  const pVal = scatterData?.stats?.pValue;
+  const sig = scatterData?.stats?.significant;
+
   const conclusions: Record<string, { type: "warning" | "insight"; title: string; text: string }> = {
     scatter: {
-      type: "warning",
-      title: "No Clear Relationship",
-      text: `The correlation is not statistically significant (R² = 0.018, p = 0.1417). This suggests other factors may dominate ${market} reactions beyond just the ${indicator} surprise size.`,
+      type: sig ? "insight" : "warning",
+      title: sig ? "Statistically Significant Pattern" : "Weak Statistical Relationship",
+      text: sig
+        ? `Based on ${n} data releases, there is a statistically significant relationship between ${indicator} surprise size and ${market} reaction (R² = ${rSq}, p = ${pVal}). This suggests that when the next ${indicator} report deviates from expectations, the magnitude of the surprise can help predict the size of the ${market} move. Larger surprises have historically produced proportionally larger market reactions.`
+        : `Across ${n} observations, the surprise size alone does not reliably predict the magnitude of ${market}'s reaction (R² = ${rSq || "N/A"}, p = ${pVal || "N/A"}). This means other factors — Fed policy expectations, market positioning, global sentiment — likely dominate. For trading purposes, knowing the direction of the surprise matters more than its size.`,
     },
     conditional: {
       type: "insight",
-      title: "Asymmetric Market Response",
-      text: `When ${indicator} comes in above expectations, ${market} has historically moved differently than when it misses. The asymmetry suggests markets weigh upside and downside surprises differently.`,
+      title: "Directional Bias Detected",
+      text: `When ${indicator} comes in above expectations, ${market} moves in a measurably different direction than when it misses. This asymmetry is actionable: if you expect ${indicator} to beat consensus, historical data suggests positioning for the "above" reaction. However, note that the average hides individual variation — some releases produced opposite moves due to competing factors.`,
     },
     path: {
       type: "insight",
-      title: "Reaction Persistence",
-      text: `Initial ${market} reactions to ${indicator} surprises tend to persist through T+5, indicating that markets sustainably reprice expectations rather than reversing the move.`,
+      title: "Does the Market Reaction Stick?",
+      text: `This chart shows whether the initial ${market} reaction to ${indicator} surprises persists or reverses over the following week. If the lines keep trending in the same direction from Day 0 to Day 5, the market is "digesting" the news — suggesting the move is fundamental. If they reverse, the initial move may have been an overreaction, creating a potential mean-reversion opportunity.`,
     },
     histogram: {
       type: "warning",
-      title: "Surprise Clustering",
-      text: `Most ${indicator} surprises cluster near zero, with extreme outcomes being rare. This means the market's reaction function is primarily shaped by small to moderate surprises.`,
+      title: "Understanding the Surprise Distribution",
+      text: `Most ${indicator} surprises are small — clustered near zero. Extreme surprises (far from center) are rare but tend to produce the largest market moves. For risk management, this distribution helps estimate the probability of a large surprise on the next release and calibrate position sizes accordingly.`,
     },
   };
   return conclusions[tabId];
@@ -160,7 +168,10 @@ const Analysis = () => {
       .catch(console.error);
   }, [indicator]);
 
-  const conclusion = useMemo(() => getConclusion(activeTab, indicator, market), [activeTab, indicator, market]);
+  const conclusion = useMemo(
+    () => getConclusion(activeTab, indicator, market, stats, scatterData),
+    [activeTab, indicator, market, stats, scatterData]
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 space-y-6 sm:px-6 lg:px-8">
@@ -251,7 +262,7 @@ const Analysis = () => {
               <div className="chart-container glass-card p-6">
                 <ResponsiveContainer width="100%" height={400}>
                   <RechartsScatter
-                    margin={{ top: 20, right: 30, bottom: 40, left: 40 }}
+                    margin={{ top: 20, right: 30, bottom: 50, left: 60 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(52, 57, 69, 0.3)" />
                     <XAxis
@@ -260,7 +271,7 @@ const Analysis = () => {
                       type="number"
                       stroke="#99a2b2"
                       tick={{ fill: "#99a2b2", fontSize: 11 }}
-                      label={{ value: "Surprise Magnitude", position: "bottom", offset: 0, fill: "#99a2b2" }}
+                      label={{ value: "Surprise Magnitude", position: "insideBottom", offset: -10, fill: "#99a2b2", fontSize: 12 }}
                     />
                     <YAxis
                       dataKey="y"
@@ -268,11 +279,30 @@ const Analysis = () => {
                       type="number"
                       stroke="#99a2b2"
                       tick={{ fill: "#99a2b2", fontSize: 11 }}
-                      label={{ value: "Price Change (%)", angle: -90, position: "insideLeft", fill: "#99a2b2" }}
+                      label={{ value: "Price Change (%)", angle: -90, position: "insideLeft", offset: 10, fill: "#99a2b2", fontSize: 12 }}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: "#1c202a", border: "1px solid #343945", borderRadius: "8px", color: "#eff1f4" }}
-                      cursor={{ strokeDasharray: "3 3" }}
+                      content={({ payload }) => {
+                        if (!payload || payload.length === 0) return null;
+                        const p = payload[0].payload;
+                        return (
+                          <div style={{
+                            backgroundColor: "#1c202a",
+                            border: "1px solid #343945",
+                            borderRadius: "8px",
+                            padding: "10px 14px",
+                            color: "#eff1f4",
+                            fontSize: "0.85rem",
+                            lineHeight: "1.6",
+                          }}>
+                            <div style={{ fontWeight: 600, marginBottom: 4 }}>{p.date}</div>
+                            <div>Actual: {Number(p.actual).toFixed(2)}</div>
+                            <div>Expected: {Number(p.consensus).toFixed(2)}</div>
+                            <div>Surprise: {Number(p.x).toFixed(2)}</div>
+                            <div>Market Move: {Number(p.y).toFixed(2)}%</div>
+                          </div>
+                        );
+                      }}
                     />
                     <Legend />
                     <Scatter
@@ -292,12 +322,6 @@ const Analysis = () => {
                     />
                   </RechartsScatter>
                 </ResponsiveContainer>
-                {scatterData.stats && (
-                  <div className="mt-4 p-3 rounded-lg bg-secondary/40 border border-border font-mono text-xs text-muted-foreground">
-                    <span className="text-foreground font-medium">Statistical Summary: </span>
-                    Sample: {scatterData.stats.n} events · R² = {scatterData.stats.rSquared} · p-value = {scatterData.stats.pValue} · {scatterData.stats.significant ? "✅ Significant" : "Not significant"}
-                  </div>
-                )}
               </div>
             )}
 
@@ -321,7 +345,25 @@ const Analysis = () => {
                       label={{ value: "Avg Reaction (%)", angle: -90, position: "insideLeft", fill: "#99a2b2" }}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: "#1c202a", border: "1px solid #343945", borderRadius: "8px", color: "#eff1f4" }}
+                      content={({ payload }) => {
+                        if (!payload || payload.length === 0) return null;
+                        const p = payload[0].payload;
+                        return (
+                          <div style={{
+                            backgroundColor: "#1c202a",
+                            border: "1px solid #343945",
+                            borderRadius: "8px",
+                            padding: "10px 14px",
+                            color: "#eff1f4",
+                            fontSize: "0.85rem",
+                          }}>
+                            <div style={{ fontWeight: 600 }}>{p.asset}</div>
+                            <div>Direction: {p.direction === "Above" ? "Higher than expected" : "Lower than expected"}</div>
+                            <div>Avg Reaction: {Number(p.avgReaction).toFixed(3)}%</div>
+                            <div>Based on: {p.count} events</div>
+                          </div>
+                        );
+                      }}
                     />
                     <Legend />
                     <ReferenceLine y={0} stroke="#99a2b2" strokeDasharray="3 3" />
@@ -347,7 +389,11 @@ const Analysis = () => {
                       dataKey="windowDays"
                       stroke="#99a2b2"
                       tick={{ fill: "#99a2b2", fontSize: 11 }}
-                      label={{ value: "Days After Release", position: "bottom", offset: 0, fill: "#99a2b2" }}
+                      tickFormatter={(v) => {
+                        const map: Record<number, string> = { 0: "Day 0", 1: "Day 1", 2: "Day 2", 5: "Day 5" };
+                        return map[v] || `Day ${v}`;
+                      }}
+                      label={{ value: "Days After Release", position: "insideBottom", offset: -5, fill: "#99a2b2" }}
                     />
                     <YAxis
                       stroke="#99a2b2"
@@ -355,7 +401,25 @@ const Analysis = () => {
                       label={{ value: "Cumulative Reaction (%)", angle: -90, position: "insideLeft", fill: "#99a2b2" }}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: "#1c202a", border: "1px solid #343945", borderRadius: "8px", color: "#eff1f4" }}
+                      content={({ payload }) => {
+                        if (!payload || payload.length === 0) return null;
+                        return (
+                          <div style={{
+                            backgroundColor: "#1c202a",
+                            border: "1px solid #343945",
+                            borderRadius: "8px",
+                            padding: "10px 14px",
+                            color: "#eff1f4",
+                            fontSize: "0.85rem",
+                          }}>
+                            {payload.map((p: any) => (
+                              <div key={p.name} style={{ color: p.color }}>
+                                {p.name}: {Number(p.value).toFixed(3)}%
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }}
                     />
                     <Legend />
                     <ReferenceLine y={0} stroke="#99a2b2" strokeDasharray="3 3" />
@@ -387,8 +451,9 @@ const Analysis = () => {
                     <XAxis
                       dataKey="value"
                       stroke="#99a2b2"
-                      tick={{ fill: "#99a2b2", fontSize: 11 }}
-                      label={{ value: "Surprise Value", position: "bottom", offset: 0, fill: "#99a2b2" }}
+                      tick={{ fill: "#99a2b2", fontSize: 10 }}
+                      tickFormatter={(v) => Number(v).toFixed(2)}
+                      label={{ value: "Surprise Value", position: "insideBottom", offset: -5, fill: "#99a2b2" }}
                     />
                     <YAxis
                       stroke="#99a2b2"
@@ -403,7 +468,7 @@ const Analysis = () => {
                 </ResponsiveContainer>
                 <div className="mt-4 p-3 rounded-lg bg-secondary/40 border border-border font-mono text-xs text-muted-foreground">
                   <span className="text-foreground font-medium">Distribution Summary: </span>
-                  Count: {histogramData.count} · Mean: {histogramData.mean.toFixed(4)} · Std Dev: {histogramData.std.toFixed(4)}
+                  Count: {histogramData.count} releases · Mean surprise: {histogramData.mean.toFixed(2)} {indicator === "CPI" ? "pp" : indicator === "NFP" ? "K jobs" : "pts"} · Std Dev: {histogramData.std.toFixed(2)} {indicator === "CPI" ? "pp" : indicator === "NFP" ? "K jobs" : "pts"}
                 </div>
               </div>
             )}
@@ -458,6 +523,74 @@ const Analysis = () => {
                 {activeTab === "histogram" && "Shows how often each size of surprise has occurred. Taller bars = more common outcomes. Helps gauge whether extreme surprises are rare or routine."}
               </p>
             </div>
+
+            {/* Raw Data Tables */}
+            {activeTab === "scatter" && scatterData && (
+              <RawDataTable
+                title="Raw Data — Surprise vs Reaction"
+                data={scatterData.points}
+                columns={[
+                  { key: "date", label: "Date" },
+                  { key: "actual", label: "Actual", format: (v) => Number(v).toFixed(2) },
+                  { key: "consensus", label: "Expected", format: (v) => Number(v).toFixed(2) },
+                  { key: "x", label: "Surprise", format: (v) => Number(v).toFixed(4) },
+                  { key: "y", label: "Market Move (%)", format: (v) => Number(v).toFixed(4) },
+                  { key: "direction", label: "Direction" },
+                ]}
+                filename={`${indicator}_${market}_scatter`}
+              />
+            )}
+
+            {activeTab === "conditional" && conditionalData && (
+              <RawDataTable
+                title="Raw Data — Above vs Below Averages"
+                data={conditionalData}
+                columns={[
+                  { key: "asset", label: "Asset" },
+                  { key: "direction", label: "Direction" },
+                  { key: "avgReaction", label: "Avg Reaction (%)", format: (v) => Number(v).toFixed(4) },
+                  { key: "medReaction", label: "Median (%)", format: (v) => v !== null ? Number(v).toFixed(4) : "—" },
+                  { key: "stdReaction", label: "Std Dev", format: (v) => v !== null ? Number(v).toFixed(4) : "—" },
+                  { key: "count", label: "N" },
+                ]}
+                filename={`${indicator}_${horizon}_conditional`}
+              />
+            )}
+
+            {activeTab === "path" && pathData && (
+              <RawDataTable
+                title="Raw Data — Reaction Paths"
+                data={pathData.individual.flatMap((event: any) =>
+                  event.path.map((p: any) => ({
+                    date: event.date,
+                    direction: event.direction,
+                    window: p.window,
+                    windowDays: p.windowDays,
+                    reaction: p.reaction,
+                  }))
+                )}
+                columns={[
+                  { key: "date", label: "Date" },
+                  { key: "direction", label: "Direction" },
+                  { key: "window", label: "Window" },
+                  { key: "windowDays", label: "Days" },
+                  { key: "reaction", label: "Cumulative Reaction (%)", format: (v) => Number(v).toFixed(4) },
+                ]}
+                filename={`${indicator}_${market}_path`}
+              />
+            )}
+
+            {activeTab === "histogram" && histogramData && (
+              <RawDataTable
+                title="Raw Data — Surprise Distribution"
+                data={histogramData.values.map((v: number, i: number) => ({ index: i + 1, value: v }))}
+                columns={[
+                  { key: "index", label: "#" },
+                  { key: "value", label: "Surprise Value", format: (v) => Number(v).toFixed(4) },
+                ]}
+                filename={`${indicator}_histogram`}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </motion.div>

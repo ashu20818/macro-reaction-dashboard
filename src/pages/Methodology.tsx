@@ -76,13 +76,38 @@ const Methodology = () => {
         </p>
       </motion.div>
 
+      {/* Key Conclusions - FIRST (what recruiters read) */}
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="space-y-4"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+            <Lightbulb className="h-4.5 w-4.5 text-primary" />
+          </div>
+          <h2 className="text-xl font-semibold">Key Conclusions</h2>
+        </div>
+        <div className="space-y-4">
+          {findings.map((finding, i) => (
+            <div key={finding.title} className="glass-card p-5 space-y-2">
+              <h3 className="text-base font-semibold">
+                Finding {i + 1}: {finding.title}
+              </h3>
+              <p className="text-sm text-foreground/80 leading-relaxed">{finding.text}</p>
+            </div>
+          ))}
+        </div>
+      </motion.section>
+
       {/* Methodology sections */}
       {sections.map((section, i) => (
         <motion.section
           key={section.title}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 * i }}
+          transition={{ delay: 0.1 + 0.05 * i }}
           className="space-y-4"
         >
           <div className="flex items-center gap-3">
@@ -102,11 +127,11 @@ const Methodology = () => {
         </motion.section>
       ))}
 
-      {/* Limitations */}
+      {/* Limitations - LAST */}
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
+        transition={{ delay: 0.35 }}
         className="space-y-4"
       >
         <div className="flex items-center gap-3">
@@ -120,31 +145,6 @@ const Methodology = () => {
             <div key={item.title}>
               <span className="text-sm font-semibold text-foreground">{i + 1}. {item.title}: </span>
               <span className="text-sm text-foreground/80 leading-relaxed">{item.text}</span>
-            </div>
-          ))}
-        </div>
-      </motion.section>
-
-      {/* Key Conclusions */}
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="space-y-4"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-            <Lightbulb className="h-4.5 w-4.5 text-primary" />
-          </div>
-          <h2 className="text-xl font-semibold">Key Conclusions</h2>
-        </div>
-        <div className="space-y-4">
-          {findings.map((finding, i) => (
-            <div key={finding.title} className="glass-card p-5 space-y-2">
-              <h3 className="text-base font-semibold">
-                Finding {i + 1}: {finding.title}
-              </h3>
-              <p className="text-sm text-foreground/80 leading-relaxed">{finding.text}</p>
             </div>
           ))}
         </div>
