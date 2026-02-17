@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import PillToggle from "@/components/dashboard/PillToggle";
 import RawDataTable from "@/components/dashboard/RawDataTable";
+import LoadingState from "@/components/dashboard/LoadingState";
 import { Button } from "@/components/ui/button";
 import { fetchStats, fetchScatter, fetchConditional, fetchPath, fetchHistogram } from "@/lib/api";
 import {
@@ -126,46 +127,88 @@ const Analysis = () => {
   const [conditionalData, setConditionalData] = useState<any>(null);
   const [pathData, setPathData] = useState<any>(null);
   const [histogramData, setHistogramData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [statsLoaded, setStatsLoaded] = useState(false);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [longWait, setLongWait] = useState(false);
+
+  // Timeout for long wait message
+  useEffect(() => {
+    if (!statsLoaded || chartLoading) {
+      const timer = setTimeout(() => setLongWait(true), 15000);
+      return () => clearTimeout(timer);
+    } else {
+      setLongWait(false);
+    }
+  }, [statsLoaded, chartLoading]);
 
   // Fetch stats when indicator changes
   useEffect(() => {
-    fetchStats(indicator).then(setStats).catch(console.error);
+    setStatsLoaded(false);
+    fetchStats(indicator)
+      .then((data) => {
+        setStats(data);
+        setStatsLoaded(true);
+      })
+      .catch((err) => {
+        console.error(err);
+        setStatsLoaded(true); // Still show UI even on error
+      });
   }, [indicator]);
 
   // Fetch scatter data when params change
   useEffect(() => {
-    setIsLoading(true);
+    setChartLoading(true);
     fetchScatter(indicator, market, horizon)
       .then((data) => {
         setScatterData(data);
-        setIsLoading(false);
+        setChartLoading(false);
       })
       .catch((err) => {
         console.error(err);
-        setIsLoading(false);
+        setChartLoading(false);
       });
   }, [indicator, market, horizon]);
 
   // Fetch conditional data when params change
   useEffect(() => {
+    setChartLoading(true);
     fetchConditional(indicator, horizon)
-      .then(setConditionalData)
-      .catch(console.error);
+      .then((data) => {
+        setConditionalData(data);
+        setChartLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setChartLoading(false);
+      });
   }, [indicator, horizon]);
 
   // Fetch path data when params change
   useEffect(() => {
+    setChartLoading(true);
     fetchPath(indicator, market)
-      .then(setPathData)
-      .catch(console.error);
+      .then((data) => {
+        setPathData(data);
+        setChartLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setChartLoading(false);
+      });
   }, [indicator, market]);
 
   // Fetch histogram data when indicator changes
   useEffect(() => {
+    setChartLoading(true);
     fetchHistogram(indicator)
-      .then(setHistogramData)
-      .catch(console.error);
+      .then((data) => {
+        setHistogramData(data);
+        setChartLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setChartLoading(false);
+      });
   }, [indicator]);
 
   const conclusion = useMemo(
@@ -198,30 +241,41 @@ const Analysis = () => {
       </motion.div>
 
       {/* Stats cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-      >
-        {[
-          { label: "Total Releases", value: stats.totalReleases.toString(), sub: stats.years, icon: null },
-          { label: "Beat Expectation", value: stats.beatExpectation.toString(), sub: `${stats.beatPct}%`, icon: ArrowUpRight, iconColor: "text-accent-green" },
-          { label: "Miss Expectation", value: stats.missExpectation.toString(), sub: `${stats.missPct}%`, icon: ArrowDownRight, iconColor: "text-accent-red" },
-          { label: "Avg Surprise", value: stats.avgSurprise, sub: "mean deviation", icon: null },
-        ].map((stat) => (
-          <div key={stat.label} className="glass-card p-4 space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
-            <p className="text-2xl font-bold font-mono">{stat.value}</p>
-            <div className="flex items-center gap-1.5">
-              {stat.icon && <stat.icon className={cn("h-3.5 w-3.5", stat.iconColor)} />}
-              <span className={cn("text-xs font-medium", stat.icon ? stat.iconColor : "text-muted-foreground")}>
-                {stat.sub}
-              </span>
+      {!statsLoaded ? (
+        <div className="glass-card">
+          <LoadingState
+            message={longWait ? "Still loading — almost there..." : "Fetching market data..."}
+            submessage={longWait
+              ? "The free server is waking up. This only happens on the first visit — after this, everything loads instantly."
+              : "The backend server may take 30-60 seconds to start on first visit."}
+          />
+        </div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        >
+          {[
+            { label: "Total Releases", value: stats.totalReleases.toString(), sub: stats.years, icon: null },
+            { label: "Beat Expectation", value: stats.beatExpectation.toString(), sub: `${stats.beatPct}%`, icon: ArrowUpRight, iconColor: "text-accent-green" },
+            { label: "Miss Expectation", value: stats.missExpectation.toString(), sub: `${stats.missPct}%`, icon: ArrowDownRight, iconColor: "text-accent-red" },
+            { label: "Avg Surprise", value: stats.avgSurprise, sub: "mean deviation", icon: null },
+          ].map((stat) => (
+            <div key={stat.label} className="glass-card p-4 space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+              <p className="text-2xl font-bold font-mono">{stat.value}</p>
+              <div className="flex items-center gap-1.5">
+                {stat.icon && <stat.icon className={cn("h-3.5 w-3.5", stat.iconColor)} />}
+                <span className={cn("text-xs font-medium", stat.icon ? stat.iconColor : "text-muted-foreground")}>
+                  {stat.sub}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
-      </motion.div>
+          ))}
+        </motion.div>
+      )}
 
       {/* Chart tabs */}
       <motion.div
@@ -258,7 +312,15 @@ const Analysis = () => {
             className="space-y-4"
           >
             {/* Scatter Chart */}
-            {activeTab === "scatter" && scatterData && (
+            {activeTab === "scatter" && chartLoading && (
+              <div className="chart-container glass-card p-6">
+                <LoadingState
+                  message="Rendering chart..."
+                  submessage="Crunching the numbers for your analysis."
+                />
+              </div>
+            )}
+            {activeTab === "scatter" && !chartLoading && scatterData && (
               <div className="chart-container glass-card p-6">
                 <ResponsiveContainer width="100%" height={400}>
                   <RechartsScatter
@@ -326,7 +388,15 @@ const Analysis = () => {
             )}
 
             {/* Conditional Chart */}
-            {activeTab === "conditional" && conditionalData && (
+            {activeTab === "conditional" && chartLoading && (
+              <div className="chart-container glass-card p-6">
+                <LoadingState
+                  message="Rendering chart..."
+                  submessage="Crunching the numbers for your analysis."
+                />
+              </div>
+            )}
+            {activeTab === "conditional" && !chartLoading && conditionalData && (
               <div className="chart-container glass-card p-6">
                 <ResponsiveContainer width="100%" height={400}>
                   <RechartsBarChart
@@ -378,7 +448,15 @@ const Analysis = () => {
             )}
 
             {/* Path Chart */}
-            {activeTab === "path" && pathData && (
+            {activeTab === "path" && chartLoading && (
+              <div className="chart-container glass-card p-6">
+                <LoadingState
+                  message="Rendering chart..."
+                  submessage="Crunching the numbers for your analysis."
+                />
+              </div>
+            )}
+            {activeTab === "path" && !chartLoading && pathData && (
               <div className="chart-container glass-card p-6">
                 <ResponsiveContainer width="100%" height={400}>
                   <ComposedChart
@@ -440,7 +518,15 @@ const Analysis = () => {
             )}
 
             {/* Histogram Chart */}
-            {activeTab === "histogram" && histogramData && (
+            {activeTab === "histogram" && chartLoading && (
+              <div className="chart-container glass-card p-6">
+                <LoadingState
+                  message="Rendering chart..."
+                  submessage="Crunching the numbers for your analysis."
+                />
+              </div>
+            )}
+            {activeTab === "histogram" && !chartLoading && histogramData && (
               <div className="chart-container glass-card p-6">
                 <ResponsiveContainer width="100%" height={400}>
                   <RechartsBarChart
@@ -473,15 +559,6 @@ const Analysis = () => {
               </div>
             )}
 
-            {/* Loading state */}
-            {isLoading && (
-              <div className="chart-container glass-card p-6 flex items-center justify-center">
-                <div className="text-center space-y-3">
-                  <p className="text-lg font-semibold text-foreground">Loading data...</p>
-                  <p className="text-sm text-muted-foreground">Fetching {indicator} data for {market}</p>
-                </div>
-              </div>
-            )}
 
             {/* Inline conclusion */}
             {conclusion && (

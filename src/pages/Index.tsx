@@ -103,16 +103,26 @@ const Index = () => {
             className="gap-2 text-base px-10"
           >
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading...
+              </>
             ) : (
-              <Play className="h-5 w-5" />
+              <>
+                <Play className="h-5 w-5" />
+                Analyze
+              </>
             )}
-            Analyze
           </Button>
-          <p className="text-sm text-muted-foreground">
-            See how <span className="text-foreground font-medium">{market}</span> reacts to{" "}
-            <span className="text-foreground font-medium">{indicator}</span> surprises
-          </p>
+          <div className="space-y-0.5">
+            <p className="text-sm text-muted-foreground">
+              See how <span className="text-foreground font-medium">{market}</span> reacts to{" "}
+              <span className="text-foreground font-medium">{indicator}</span> surprises
+            </p>
+            <p className="text-xs text-muted-foreground/60">
+              First load may take 30–60s while the server wakes up.
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>
